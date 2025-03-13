@@ -1,7 +1,7 @@
 # Token types
 # EOF (end-of-file) token is used to indicate that
 # there is no more input left for lexical analysis
-INTEGER, MUL, DIV, EOF = 'INTEGER', 'MUL', 'DIV', 'EOF'
+INTEGER, PLUS, MINUS, MUL, DIV, EOF = ('INTEGER', 'PLUS', 'MINUS', 'MUL', 'DIV', 'EOF')
 
 class Token(object):
     def __init__(self, type, value):
@@ -59,6 +59,14 @@ class Lexer(object):
             if self.current_char.isdigit():
                 return Token(INTEGER, self.integer())
 
+            if self.current_char == '+':
+                self.advance()
+                return Token(PLUS, '+')
+
+            if self.current_char == '-':
+                self.advance()
+                return Token(MINUS, '-')
+
             if self.current_char == '*':
                 self.advance()
                 return Token(MUL, '*')
@@ -105,6 +113,19 @@ class Interpreter(object):
         """
         result = self.factor()
 
+        while self.current_token.type in (PLUS, MINUS):
+            token = self.current_token
+            if token.type == PLUS:
+                self.eat(PLUS)
+                result = result * self.factor()
+            elif token.type == MINUS:
+                self.eat(MINUS)
+                result = result / self.factor()
+        return result
+
+    def term(self):
+        """Return an INTEGER token value."""
+        result = self.factor()
         while self.current_token.type in (MUL, DIV):
             token = self.current_token
             if token.type == MUL:
@@ -113,7 +134,6 @@ class Interpreter(object):
             elif token.type == DIV:
                 self.eat(DIV)
                 result = result / self.factor()
-
         return result
 
 def main():
