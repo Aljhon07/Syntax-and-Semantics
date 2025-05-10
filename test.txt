@@ -1,0 +1,7 @@
+BEGIN
+    BEGIN
+        x := 7;
+        y := x;
+        z := x + y;
+    END;
+END.
