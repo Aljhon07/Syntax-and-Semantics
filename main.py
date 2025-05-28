@@ -1,3 +1,6 @@
+from collections import OrderedDict
+import sys
+
 INTEGER, REAL, INTEGER_CONST, REAL_CONST, PLUS, MINUS, MUL, INTEGER_DIV, FLOAT_DIV, LPAREN, RPAREN, ID, ASSIGN, BEGIN, END, SEMI, DOT, PROGRAM, VAR, COLON, COMMA, EOF = (
 'INTEGER', 'REAL', 'INTEGER_CONST', 'REAL_CONST', 'PLUS', 'MINUS', 'MUL', 'INTEGER_DIV', 'FLOAT_DIV', 'LPAREN', 'RPAREN', 'ID', 'ASSIGN', 'BEGIN', 'END', 'SEMI', 'DOT', 'PROGRAM', 'VAR', 'COLON', 'COMMA', 'EOF'
 )
@@ -522,21 +525,19 @@ class Interpreter(NodeVisitor):
     def __init__(self, parser):
         self.parser = parser
         self.GLOBAL_SCOPE = {}
-
+    
     def visit_Program(self, node):
         self.visit(node.block)
-
+    
     def visit_Block(self, node):
         for declaration in node.declarations:
             self.visit(declaration)
         self.visit(node.compound_statement)
-
+    
     def visit_VarDecl(self, node):
-        # Do nothing
         pass
 
     def visit_Type(self, node):
-        # Do nothing
         pass
 
     def visit_BinOp(self, node):
@@ -581,54 +582,128 @@ class Interpreter(NodeVisitor):
         pass
 
     def interpret(self):
-        tree = self.parser.parse()
-        if tree is None:
-            return ''
-        return self.visit(tree)
+        # tree = self.parser.parse()
+        # if tree is None:
+        #     return ''
+        return self.visit(self.parser)
+    
+class Symbol(object):
+    def __init__(self, name, type=None):
+        self.name = name
+        self.type = type
 
+class BuiltInTypeSymbol(Symbol):
+    def __init__(self, name):
+        super().__init__(name)
+    
+    def __str__(self):
+        return self.name
+    
+    __repr__ = __str__
+
+class VarSymbol(Symbol):
+    def __init__(self, name, type):
+        super().__init__(name, type)
+    
+    def __str__(self):
+        return '<{name}:{type}>'.format(name=self.name, type=self.type)
+    
+    __repr__ = __str__
+
+class SymbolTable(object):
+    def __init__(self):
+        self._symbols = OrderedDict()
+        self._init_builtins()
+    
+    def _init_builtins(self):
+        self.define(BuiltInTypeSymbol('INTEGER'))
+        self.define(BuiltInTypeSymbol('REAL'))
+    
+    def __str__(self):
+        s = 'Symbols: {symbols}'.format(
+            symbols=[value for value in self._symbols.values()]
+        )
+        return s
+    
+    __repr__ = __str__
+    
+    def define(self, symbol):
+        print('Define: %s' % symbol)
+        self._symbols[symbol.name] = symbol
+    
+    def lookup(self, name):
+        print('Lookup: %s' % name)
+        symbol = self._symbols.get(name)
+        return symbol
+
+class SymbolTableBuilder(NodeVisitor):
+    def __init__(self):
+        self.symtab = SymbolTable()
+    
+    def visit_Block(self, node):
+        for declaration in node.declarations:
+            self.visit(declaration)
+        self.visit(node.compound_statement)
+    
+    def visit_Program(self, node):
+        self.visit(node.block)
+    
+    def visit_BinOp(self, node):
+        self.visit(node.left)
+        self.visit(node.right)
+    
+    def visit_Num(self, node):
+        pass
+    
+    def visit_UnaryOp(self, node):
+        self.visit(node.expr)
+    
+    def visit_Compound(self, node):
+        for child in node.children:
+            self.visit(child)
+    
+    def visit_NoOp(self, node):
+        pass
+    
+    def visit_VarDecl(self, node):
+        type_name = node.type_node.value
+        type_symbol = self.symtab.lookup(type_name)
+        var_name = node.var_node.value
+        var_symbol = VarSymbol(var_name, type_symbol)
+        self.symtab.define(var_symbol)
+    
+    def visit_Assign(self, node):
+        var_name = node.left.value
+        var_symbol = self.symtab.lookup(var_name)
+        if var_symbol is None:
+            raise NameError(repr(var_name))
+        self.visit(node.right)
+    
+    def visit_Var(self, node):
+        var_name = node.value
+        var_symbol = self.symtab.lookup(var_name)
+        if var_symbol is None:
+            raise NameError(repr(var_name))
 
 def main():
-    import sys
-    if len(sys.argv) > 1:
-        with open(sys.argv[1], 'r') as f:
-            text = f.read()
-    else:
-        print('Enter your code (Ctrl+D to finish):')
-        try:
-            text = sys.stdin.read()
-        except EOFError:
-            text = """
-                    PROGRAM Test;
-                    VAR
-                    number     : INTEGER;
-                    a, b, c, x : INTEGER;
-                    y          : REAL;
-
-                    BEGIN {Part10}
-                    BEGIN
-                        number := 2;
-                        a := number;
-                        b := 10 * a + 10 * number DIV 4;
-                        c := a - - b
-                    END;
-                    x := 11;
-                    y := 20 / 7 + 3.14;
-                    { writeln('a = ', a); }
-                    { writeln('b = ', b); }
-                    { writeln('c = ', c); }
-                    { writeln('number = ', number); }
-                    { writeln('x = ', x); }
-                    { writeln('y = ', y); }
-                    END.  {Part10}
-                        """
+    text = open(sys.argv[1], 'r').read()
 
     lexer = Lexer(text)
     parser = Parser(lexer)
-    interpreter = Interpreter(parser)
+    tree = parser.parse()
+    symtab_builder = SymbolTableBuilder()
+    symtab_builder.visit(tree)
+    print('')
+    print('Symbol Table contents:')
+    print(symtab_builder.symtab)
+
+    interpreter = Interpreter(tree)
     result = interpreter.interpret()
-    print(
-        interpreter.GLOBAL_SCOPE
-    )
+
+    print('')
+    print('Run-time GLOBAL_MEMORY contents:')
+    for k, v in sorted(interpreter.GLOBAL_SCOPE.items()):
+        print('{} = {}'.format(k, v))
 
 if __name__ == '__main__':
     main()
