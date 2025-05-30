@@ -1,8 +1,8 @@
 from collections import OrderedDict
 import sys
 
-INTEGER, REAL, INTEGER_CONST, REAL_CONST, PLUS, MINUS, MUL, INTEGER_DIV, FLOAT_DIV, LPAREN, RPAREN, ID, ASSIGN, BEGIN, END, SEMI, DOT, PROGRAM, VAR, COLON, COMMA, EOF = (
-'INTEGER', 'REAL', 'INTEGER_CONST', 'REAL_CONST', 'PLUS', 'MINUS', 'MUL', 'INTEGER_DIV', 'FLOAT_DIV', 'LPAREN', 'RPAREN', 'ID', 'ASSIGN', 'BEGIN', 'END', 'SEMI', 'DOT', 'PROGRAM', 'VAR', 'COLON', 'COMMA', 'EOF'
+INTEGER, REAL, INTEGER_CONST, REAL_CONST, PLUS, MINUS, MUL, INTEGER_DIV, FLOAT_DIV, LPAREN, RPAREN, ID, ASSIGN, BEGIN, END, SEMI, DOT, PROGRAM, VAR, COLON, COMMA, PROCEDURE,EOF = (
+'INTEGER', 'REAL', 'INTEGER_CONST', 'REAL_CONST', 'PLUS', 'MINUS', 'MUL', 'INTEGER_DIV', 'FLOAT_DIV', 'LPAREN', 'RPAREN', 'ID', 'ASSIGN', 'BEGIN', 'END', 'SEMI', 'DOT', 'PROGRAM', 'VAR', 'COLON', 'COMMA','PROCEDURE', 'EOF'
 )
 
 class Token(object):
@@ -35,6 +35,8 @@ RESERVED_KEYWORDS = {
     'REAL': Token('REAL', 'REAL'),
     'BEGIN': Token('BEGIN', 'BEGIN'),
     'END': Token('END', 'END'),
+    'PROCEDURE': Token('PROCEDURE', 'PROCEDURE'),
+
 }
 
 
@@ -250,6 +252,10 @@ class Type(AST):
         self.token = token
         self.value = token.value
 
+class ProcedureDecl(AST):
+    def __init__(self, proc_name, block_node):
+        self.proc_name = proc_name
+        self.block_node = block_node
 
 class Parser(object):
     def __init__(self, lexer):
@@ -289,9 +295,6 @@ class Parser(object):
         return node
 
     def declarations(self):
-        """declarations : VAR (variable_declaration SEMI)+
-                        | empty
-        """
         declarations = []
         if self.current_token.type == VAR:
             self.eat(VAR)
@@ -299,6 +302,16 @@ class Parser(object):
                 var_decl = self.variable_declaration()
                 declarations.extend(var_decl)
                 self.eat(SEMI)
+
+        while self.current_token.type == PROCEDURE:
+            self.eat(PROCEDURE)
+            proc_name = self.current_token.value
+            self.eat(ID)
+            self.eat(SEMI)
+            block_node = self.block()
+            proc_decl = ProcedureDecl(proc_name, block_node)
+            declarations.append(proc_decl)
+            self.eat(SEMI)
 
         return declarations
 
@@ -540,6 +553,9 @@ class Interpreter(NodeVisitor):
     def visit_Type(self, node):
         pass
 
+    def visit_ProcedureDecl(self, node):
+        pass
+
     def visit_BinOp(self, node):
         if node.op.type == PLUS:
             return self.visit(node.left) + self.visit(node.right)
@@ -654,7 +670,10 @@ class SymbolTableBuilder(NodeVisitor):
     
     def visit_Num(self, node):
         pass
-    
+
+    def visit_ProcedureDecl(self, node):
+        pass
+
     def visit_UnaryOp(self, node):
         self.visit(node.expr)
     
